@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  log:
+    container_name: log
+    image: rsyslog/rsyslog_base_alpine:v1
+    restart: always
+    ports:
+      - 127.0.0.1:1523:10514
+    volumes:
+      - ./logs:/var/log/
+      - ./rsyslog.conf:/etc/rsyslog.conf
+  loggapp:
+    build: ./test
+    image: logapp:0.0.1
+    depends_on:
+      - log
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://127.0.0.1:1523"
+        tag: "app"
+        labels: "testing,frontend"

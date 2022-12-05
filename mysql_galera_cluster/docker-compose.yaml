@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+  log:
+    container_name: log
+    rsyslog:
+      build:
+        context: ./log/alpine/
+    #image: rsyslog/rsyslog_base_alpine:v1
+    restart: always
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    volumes:
+      - ./log/log_data/:/var/log/:z
+      - type: bind
+        source: ./log/etc/rsyslog.conf
+        target: /etc/rsyslog.conf
+    ports:
+      - 127.0.0.1:1513:10514
+    networks:
+      - mysql_net
+  db1:
+    container_name: db1
+    image: mariadb:10.6.7
+    volumes:
+      - ./db1/data:/var/lib/mysql
+      - ./db1/etc/my.cnf:/etc/mysql/my.cnf
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: oatos@mysql
+    command: --wsrep-new-cluster
+    ports:
+      - 3307:3306
+    networks:
+      - mysql_net
+    depends_on:
+      - log
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://localhost:1513"
+        tag: "db1"
+  db2:
+    container_name: db2
+    image: mariadb:10.6.7
+    volumes:
+      - ./db2/data:/var/lib/mysql
+      - ./db2/etc/my.cnf:/etc/mysql/my.cnf
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: oatos@mysql
+    ports:
+      - 3308:3306
+    links:
+      - db1
+    networks:
+      - mysql_net
+    depends_on:
+      - log
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://localhost:1513"
+        tag: "db2"
+
+  db3:
+    container_name: db3
+    image: mariadb:10.6.7
+    volumes:
+      - ./db3/data:/var/lib/mysql
+      - ./db3/etc/my.cnf:/etc/mysql/my.cnf
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: oatos@mysql
+    ports:
+      - 3309:3306
+    links:
+      - db1
+    networks:
+      - mysql_net
+    depends_on:
+      - log
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://localhost:1513"
+        tag: "db3"
+  ha:
+    container_name: ha
+    image: haproxy:2.6.6
+    volumes:
+      - ./haproxy/etc/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    restart: always
+    ports:
+      - 9999:9999
+      - 3306:3306
+    depends_on:
+      - db1
+      - db2
+      - db3
+      - log
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "tcp://localhost:1513"
+        tag: "ha"
+    networks:
+      - mysql_net
+    
+
+networks:
+  mysql_net:
+    driver: bridge
+
